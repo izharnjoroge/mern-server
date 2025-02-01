@@ -1,12 +1,10 @@
-version: "3.8"
-
 services:
   app:
     build: .
     ports:
       - "3000:3000"
     environment:
-      - MONGO_URI=mongodb://mongo:27017/Node-API
+      - MONGO_URI=mongodb://mongo:27017/Node-API 
       - PORT=3000
     depends_on:
       - mongo
@@ -15,7 +13,7 @@ services:
       - /app/node_modules
 
   mongo:
-    image: mongo:6.0
+    image: mongo:4.4
     container_name: mongodb
     restart: always
     ports:
