@@ -6,12 +6,13 @@ services:
     environment:
       - MONGO_URI=mongodb://mongo:27017/Node-API 
       - PORT=3000
+      - JWT_SECRET=1234782189HDKD1M2Dgdsjds
     depends_on:
       - mongo
     volumes:
       - .:/app
       - /app/node_modules
-
+    command: yarn dev
   mongo:
     image: mongo:4.4
     container_name: mongodb
