@@ -7,7 +7,7 @@ const verifyRole = require("../middleware/role.middleware.js");
 router.get('/',getProducts);
 router.get("/:id", getProduct);
 router.post("/", verifyToken,verifyRole('admin') ,createProduct);
-router.put("/:id", verifyToken , verifyRole("admin") , updateProduct);
+router.patch("/:id", verifyToken , verifyRole("admin") , updateProduct);
 router.delete("/:id",verifyToken , verifyRole("admin") ,deleteProduct);
 
 

@@ -1,4 +1,5 @@
-const jwt = require("jsonwebtoken")
+const jwt = require("jsonwebtoken");
+
 
 
 
@@ -16,7 +17,7 @@ function verifyToken(req,res,next){
         try {
             const decode = jwt.verify(token,process.env.JWT_SECRET)
             req.user = decode;
-            console.log("user",req.user)
+           
             return next()
         } catch (error) {
             res.status(400).json({message:"Invalid Token"})
@@ -24,9 +25,12 @@ function verifyToken(req,res,next){
 
 
     }else{
-        return  res.status(401).json({message:"Missing token,access denied"})
+        return  res.status(401).json({message:"Missing authorization header"})
     }
 }
+
+
+
 
 
 module.exports = verifyToken

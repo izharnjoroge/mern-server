@@ -13,14 +13,14 @@ mongooseConnect()
 
 
 // routes
-app.use("/api/auth", authRoute);
-app.use("/api/products", productRoute);
+app.use("/api/v1/auth", authRoute);
+app.use("/api/v1/products", productRoute);
 
 
 
 
 app.get("/", (req, res) => {
-  res.send("Hello from Node API Server Updated");
+  res.send("Hello from Server Updated");
 });
 
 
