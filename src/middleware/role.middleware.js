@@ -1,15 +1,12 @@
+function verifyRole(...allowedRoles) {
+  return (req, res, next) => {
+    if (!allowedRoles.includes(req.user.isAdmin)) {
+      console.log(req.user.isAdmin);
+      return res.status(403).json({ message: 'Forbidden' });
+    }
 
-
-
-function verifyRole (...allowedRoles){
-  return (req,res,next)=>{
-   if(!allowedRoles.includes(req.user.role)){
-    return res.status(403).json({message:"Forbidden"})
-   }
-
-   next()
-
-  }
+    next();
+  };
 }
 
-module.exports = verifyRole
+module.exports = verifyRole;
