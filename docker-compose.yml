@@ -1,26 +1,38 @@
 services:
-  app:
-    build: .
+  valkey:
+    image: valkey/valkey:latest
     ports:
-      - "3000:3000"
-    environment:
-      - MONGO_URI=mongodb://mongo:27017/Node-API 
-      - PORT=3000
-      - JWT_SECRET=1234782189HDKD1M2Dgdsjds
-    depends_on:
-      - mongo
+      - '6379:6379'
     volumes:
-      - .:/app
-      - /app/node_modules
-    command: yarn dev
+      - valkey_data:/data
+    restart: unless-stopped
+
   mongo:
     image: mongo:4.4
     container_name: mongodb
     restart: always
     ports:
-      - "27017:27017"
+      - '27017:27017'
     volumes:
       - mongo-data:/data/db
 
+  app:
+    build: .
+    ports:
+      - '3000:3000'
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/Node-API
+      - PORT=3000
+      - JWT_SECRET=1234782189HDKD1M2Dgdsjds
+      - REDIS_URL=redis://valkey:6379
+    depends_on:
+      - mongo
+      - valkey
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: yarn dev
+
 volumes:
   mongo-data:
+  valkey_data:

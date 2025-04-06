@@ -1,6 +1,7 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const User = require('../models/user.model');
+const { successResponse, errorResponse } = require('../errors/errors');
 
 async function login(req, res) {
   try {
@@ -9,13 +10,13 @@ async function login(req, res) {
     const user = await User.findOne({ userEmail });
 
     if (!user) {
-      return res.status(404).json({ message: 'User does not exist' });
+      return errorResponse(res, 'User does not exist', 404, null);
     }
 
     const isMatch = await bcrypt.compare(userPassword, user.userPassword);
 
     if (!isMatch) {
-      return res.status(400).json({ message: 'Wrong password' });
+      return errorResponse(res, 'Wrong Password', 400, null);
     }
 
     // Generate access token
@@ -35,10 +36,9 @@ async function login(req, res) {
     user.refreshToken = refreshToken;
     await user.save();
 
-    // Send tokens to the client
-    res.status(200).json({ accessToken, refreshToken });
+    successResponse(res, { accessToken, refreshToken });
   } catch (error) {
-    res.status(500).json({ message: 'Something went wrong', error });
+    errorResponse(res, 'Something went wrong', 500, error);
   }
 }
 
@@ -58,9 +58,9 @@ async function register(req, res) {
 
     await createdUser.save();
 
-    res.status(201).json({ message: 'User Created Successfully' });
+    successResponse(res, 'User created');
   } catch (error) {
-    res.status(500).json({ message: 'Something went wrong', error });
+    errorResponse(res, 'Something went wrong', 500, error);
   }
 }
 
@@ -69,7 +69,7 @@ async function refreshToken(req, res) {
     const { refreshToken } = req.body;
 
     if (!refreshToken) {
-      return res.status(401).json({ message: 'Refresh token is required' });
+      return errorResponse(res, 'Refresh token is missing', 401, null);
     }
 
     // Verify the refresh token
@@ -79,7 +79,7 @@ async function refreshToken(req, res) {
     const user = await User.findById(decoded.id);
 
     if (!user || user.refreshToken !== refreshToken) {
-      return res.status(403).json({ message: 'Invalid refresh token' });
+      return errorResponse(res, 'Invalid refresh token', 403, null);
     }
 
     // Generate a new access token
@@ -89,9 +89,9 @@ async function refreshToken(req, res) {
       { expiresIn: '15m' }
     );
 
-    res.status(200).json({ accessToken });
+    successResponse(res, { accessToken, refreshToken });
   } catch (error) {
-    res.status(500).json({ message: 'Something went wrong', error });
+    errorResponse(res, 'Something went wrong', 500, error);
   }
 }
 

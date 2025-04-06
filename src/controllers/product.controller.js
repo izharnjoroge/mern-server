@@ -1,12 +1,38 @@
 const Product = require('../models/product.model');
+const {
+  successResponse,
+  errorResponse,
+  notFoundResponse,
+  validationError,
+} = require('../errors/errors');
+
+const { createClient } = require('redis');
+
+// Initialize Valkey client
+const client = createClient({
+  url: process.env.REDIS_URL || 'redis://localhost:6379',
+});
+
+client.on('error', (err) => console.error('Valkey error:', err));
+client.connect();
+
+// Cache TTL (5 minutes)
+const CACHE_TTL = 300;
 
 async function getProducts(req, res) {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 10));
     const skip = (page - 1) * limit;
+    const cacheKey = `products:page:${page}:limit:${limit}`;
 
+    // Try cache first
+    const cached = await client.get(cacheKey);
+    if (cached) {
+      return successResponse(res, JSON.parse(cached));
+    }
+
+    // Cache miss - fetch from DB
     const [totalProducts, products] = await Promise.all([
       Product.countDocuments({}),
       Product.find({})
@@ -17,72 +43,114 @@ async function getProducts(req, res) {
         .lean(),
     ]);
 
-    const totalPages = Math.ceil(totalProducts / limit);
-
-    res.status(200).json({
+    const response = {
       products,
       pagination: {
         currentPage: page,
-        totalPages,
+        totalPages: Math.ceil(totalProducts / limit),
         totalProducts,
-        hasNextPage: page < totalPages,
+        hasNextPage: page < Math.ceil(totalProducts / limit),
         hasPreviousPage: page > 1,
       },
-    });
+    };
+
+    await client.setEx(cacheKey, CACHE_TTL, JSON.stringify(response));
+    successResponse(res, response);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    errorResponse(res, 'Failed to fetch products', 500, error);
   }
 }
 
 async function getProduct(req, res) {
   try {
-    const { id } = req.params;
-    const product = await Product.findById(id);
-    res.status(200).json(product);
+    const cacheKey = `product:${req.params.id}`;
+    const cached = await client.get(cacheKey);
+    if (cached) {
+      return successResponse(res, JSON.parse(cached));
+    }
+
+    const product = await Product.findById(req.params.id).select('-__v').lean();
+    if (!product) {
+      return notFoundResponse(res, 'Product');
+    }
+
+    await client.setEx(cacheKey, CACHE_TTL, JSON.stringify(product));
+    successResponse(res, product);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    errorResponse(res, 'Failed to fetch product', 500, error);
   }
 }
 
 async function createProduct(req, res) {
   try {
+    if (!req.body.name || !req.body.price) {
+      return validationError(res, ['Name and price are required']);
+    }
+
     const product = await Product.create(req.body);
-    res.status(201).json(product);
+    await client.del('products:*');
+    successResponse(res, product, 201);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    if (error.code === 11000) {
+      return errorResponse(res, 'Product with this name already exists', 400);
+    }
+    errorResponse(res, 'Failed to create product', 500, error);
   }
 }
 
 async function updateProduct(req, res) {
   try {
-    const { id } = req.params;
+    const updates = Object.keys(req.body);
+    const allowedUpdates = ['name', 'price', 'quantity', 'image'];
+    const isValidOperation = updates.every((update) =>
+      allowedUpdates.includes(update)
+    );
 
-    const product = await Product.findByIdAndUpdate(id, req.body);
-
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
+    if (!isValidOperation) {
+      return validationError(res, ['Invalid updates!']);
     }
 
-    const updatedProduct = await Product.findById(id);
-    res.status(200).json(updatedProduct);
+    const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true,
+    }).select('-__v');
+
+    if (!product) {
+      return notFoundResponse(res, 'Product');
+    }
+
+    await Promise.all([
+      client.del(`product:${req.params.id}`),
+      client.del('products:*'),
+    ]);
+
+    successResponse(res, product);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    if (error.name === 'ValidationError') {
+      return validationError(
+        res,
+        Object.values(error.errors).map((e) => e.message)
+      );
+    }
+    errorResponse(res, 'Failed to update product', 500, error);
   }
 }
 
 async function deleteProduct(req, res) {
   try {
-    const { id } = req.params;
-
-    const product = await Product.findByIdAndDelete(id);
-
+    const product = await Product.findByIdAndDelete(req.params.id);
     if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
+      return notFoundResponse(res, 'Product');
     }
 
-    res.status(200).json({ message: 'Product deleted successfully' });
+    await Promise.all([
+      client.del(`product:${req.params.id}`),
+      client.del('products:*'),
+    ]);
+
+    successResponse(res, { id: product._id, name: product.name });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    errorResponse(res, 'Failed to delete product', 500, error);
   }
 }
 
